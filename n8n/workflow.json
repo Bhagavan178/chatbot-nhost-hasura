@@ -1,0 +1,45 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "options": {
+          "binaryData": false
+        },
+        "url": "={{ $json["chatId"] }}"
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const credentials = this.getCredentials('hasura');\nconst { chatId, message } = items[0].json;\n\n// Verify chat ownership\nconst verifyChat = await this.helpers.httpRequest({\n  url: `${credentials.graphqlEndpoint}`,\n  method: 'POST',\n  headers: {\n    'x-hasura-admin-secret': credentials.adminSecret,\n  },\n  body: {\n    query: `\n      query VerifyChat($chatId: uuid!) {\n        messages(where: {chat_id: {_eq: $chatId}, user_id: {_eq: "X-Hasura-User-Id"}}) {\n          id\n        }\n      }\n    `,\n    variables: { chatId },\n  },\n  json: true,\n});\n\nif (!verifyChat.data.messages.length) {\n  throw new Error('Unauthorized: User does not own this chat');\n}\n\n// Call OpenRouter API\nconst openRouterResponse = await this.helpers.httpRequest({\n  url: 'https://openrouter.ai/api/v1/chat/completions',\n  method: 'POST',\n  headers: {\n    'Authorization': `Bearer ${this.getCredentials('openRouter').apiKey}`\n  },\n  body: {\n    model: 'openai:gpt-4',\n    messages: [{ role: 'user', content: message }],\n    stream: false\n  },\n  json: true,\n});\n\n// Save response to Hasura\nconst saveResponse = await this.helpers.httpRequest({\n  url: `${credentials.graphqlEndpoint}`,\n  method: 'POST',\n  headers: {\n    'x-hasura-admin-secret': credentials.adminSecret,\n  },\n  body: {\n    query: `\n      mutation SaveMessage($chatId: uuid!, $content: String!) {\n        insert_messages_one(object: {\n          chat_id: $chatId,\n          content: $content,\n          is_bot: true\n        }) {\n          id\n        }\n      }\n    `,\n    variables: {\n      chatId,\n      content: openRouterResponse.choices[0].message.content\n    },\n  },\n  json: true,\n});\n\nreturn [\n  {\n    json: {\n      response: openRouterResponse.choices[0].message.content\n    }\n  }\n];"
+      },
+      "name": "Function",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Function",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
