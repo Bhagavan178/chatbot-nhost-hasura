@@ -1,0 +1,11 @@
+[project]
+name = "chatbot-nhost-hasura"
+
+[auth]
+enabled = true
+
+[hasura]
+enabled = true
+
+[storage]
+enabled = true

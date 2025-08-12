@@ -1,0 +1,36 @@
+version: 3
+metadata:
+  sources:
+    - name: default
+      tables:
+        - table:
+            schema: public
+            name: chats
+        - table:
+            schema: public
+            name: messages
+        - table:
+            schema: public
+            name: users
+        - table:
+            schema: public
+            name: chats_users
+  actions:
+    - name: sendMessage
+      definition:
+        kind: webhook
+        webhook: /functions/sendMessage
+        type: mutation
+      request_transform:
+        headers:
+          - name: x-hasura-admin-secret
+            value: ${{env.HASURA_ADMIN_SECRET}}
+      response_transform:
+        data:
+          $: "$.response.data"
+  remote_schemas:
+    - name: openai
+      definition:
+        url: ${{env.OPENROUTER_API_KEY}}
+        forward_client_headers: true
+        timeout_seconds: 60
